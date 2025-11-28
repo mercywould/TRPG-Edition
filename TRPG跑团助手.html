@@ -63,7 +63,7 @@
         }
 
         /* Custom Scrollbar */
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(71, 85, 105, 0.4); border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(99, 102, 241, 0.5); }
@@ -97,11 +97,6 @@
             backdrop-filter: blur(24px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Animated Background */
-        .bg-gradient-animate {
-            background: radial-gradient(circle at 50% 50%, rgba(76, 29, 149, 0.15), rgba(15, 23, 42, 0));
         }
     </style>
 </head>
@@ -227,7 +222,6 @@
           </div>
         );
 
-        // [New Component] Dice Counter - Replaces the ugly number input
         const DiceCounter = ({ value, onChange, className }) => {
             const handleDecrement = () => onChange(Math.max(1, value - 1));
             const handleIncrement = () => onChange(Math.min(20, value + 1));
@@ -300,7 +294,24 @@
           const [activeCharId, setActiveCharId] = useState('pc');
           const [inputText, setInputText] = useState('');
           const [diceCount, setDiceCount] = useState(1);
+          
+          // Responsive Sidebar State
           const [sidebarOpen, setSidebarOpen] = useState(true);
+
+          // Detect Mobile
+          useEffect(() => {
+              const checkMobile = () => {
+                  if (window.innerWidth < 768) {
+                      setSidebarOpen(false); // Close on mobile default
+                  } else {
+                      setSidebarOpen(true); // Open on desktop default
+                  }
+              };
+              checkMobile();
+              window.addEventListener('resize', checkMobile);
+              return () => window.removeEventListener('resize', checkMobile);
+          }, []);
+
           const [deleteConfirm, setDeleteConfirm] = useState(null);
 
           const [showModuleModal, setShowModuleModal] = useState(false);
@@ -474,10 +485,23 @@
                  <div className="absolute top-[40%] left-[30%] w-72 h-72 bg-slate-800/20 rounded-full blur-[80px] animate-blob" style={{animationDelay: '4s'}}></div>
               </div>
 
+              {/* Mobile Sidebar Backdrop */}
+              {sidebarOpen && (
+                  <div 
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden animate-fade-in"
+                    onClick={() => setSidebarOpen(false)}
+                  ></div>
+              )}
+
               {/* --- SIDEBAR --- */}
               <aside className={cn(
-                  "glass-panel border-r-0 border-y-0 border-l-0 flex flex-col transition-all duration-500 ease-in-out z-30 shrink-0 relative",
-                  sidebarOpen ? "w-72" : "w-18"
+                  "glass-panel border-r-0 border-y-0 border-l-0 flex flex-col transition-all duration-300 ease-in-out z-40 shrink-0",
+                  // Mobile: Fixed drawer
+                  "fixed inset-y-0 left-0 h-full",
+                  // Desktop: Relative
+                  "md:relative",
+                  // Visibility & Width Logic
+                  sidebarOpen ? "w-72 translate-x-0" : "w-72 -translate-x-full md:w-20 md:translate-x-0"
               )}>
                 {/* Header */}
                 <div className="h-20 flex items-center justify-center px-4 border-b border-white/5 bg-slate-900/30 backdrop-blur-md">
@@ -502,7 +526,10 @@
                     ].map(nav => (
                         <button 
                             key={nav.id}
-                            onClick={() => setView(nav.id)}
+                            onClick={() => {
+                                setView(nav.id);
+                                if(window.innerWidth < 768) setSidebarOpen(false); // Close on mobile select
+                            }}
                             className={cn(
                                 "w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group", 
                                 view === nav.id 
@@ -524,7 +551,7 @@
                         {sidebarOpen && <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">当前扮演</div>}
                         
                         <div 
-                           onClick={() => setActiveCharId('pc')}
+                           onClick={() => { setActiveCharId('pc'); if(window.innerWidth < 768) setSidebarOpen(false); }}
                            className={cn(
                                "relative group flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-all duration-300 border",
                                activeCharId === 'pc' 
@@ -567,7 +594,7 @@
                              return (
                                 <div 
                                     key={char.id}
-                                    onClick={() => setActiveCharId(char.id)}
+                                    onClick={() => { setActiveCharId(char.id); if(window.innerWidth < 768) setSidebarOpen(false); }}
                                     className={cn(
                                         "relative group flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-all duration-300 border",
                                         activeCharId === char.id 
@@ -603,8 +630,8 @@
                      </div>
                 </div>
 
-                {/* Footer Toggle */}
-                <div className="p-4 border-t border-white/5">
+                {/* Footer Toggle (Desktop Only) */}
+                <div className="p-4 border-t border-white/5 hidden md:block">
                     <button onClick={() => setSidebarOpen(!sidebarOpen)} className="w-full flex items-center justify-center p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
                         {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
                     </button>
@@ -615,13 +642,21 @@
               <main className="flex-1 flex flex-col relative min-w-0 z-10">
                 
                 {/* Top Bar */}
-                <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 backdrop-blur-sm sticky top-0 z-20">
-                    <div className="flex flex-col justify-center">
-                        <h1 className="text-white font-bold text-xl tracking-tight">{moduleInfo.title || "未命名模组"}</h1>
-                        <p className="text-xs text-slate-500 truncate max-w-md mt-1">{moduleInfo.description || "暂无描述"}</p>
-                    </div>
+                <header className="h-20 flex items-center justify-between px-4 md:px-8 border-b border-white/5 backdrop-blur-sm sticky top-0 z-20 bg-slate-900/80 md:bg-transparent">
                     <div className="flex items-center gap-3">
-                        <Button variant="ghost" size="sm" icon={Upload} title="读取存档" className="relative overflow-hidden">
+                         {/* Mobile Menu Button */}
+                         <button onClick={() => setSidebarOpen(true)} className="p-2 -ml-2 text-slate-400 hover:text-white md:hidden">
+                             <Menu size={24} />
+                         </button>
+
+                         <div className="flex flex-col justify-center">
+                            <h1 className="text-white font-bold text-lg md:text-xl tracking-tight">{moduleInfo.title || "未命名模组"}</h1>
+                            <p className="text-xs text-slate-500 truncate max-w-[150px] md:max-w-md mt-1">{moduleInfo.description || "暂无描述"}</p>
+                         </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <Button variant="ghost" size="sm" icon={Upload} title="读取存档" className="relative overflow-hidden hidden md:flex">
                              <input type="file" accept=".json" onChange={(e) => {
                                 const file = e.target.files[0];
                                 if(!file) return;
@@ -639,19 +674,25 @@
                              }} className="absolute inset-0 opacity-0 cursor-pointer"/>
                              导入
                         </Button>
+                        <Button variant="ghost" size="icon" icon={Save} onClick={() => {
+                            const data = { version: '4.0', timestamp: Date.now(), moduleInfo, characters, logs };
+                            const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a'); a.href=url; a.download=`Save_${moduleInfo.title}_${Date.now()}.json`; a.click();
+                        }} className="md:hidden"></Button>
                         <Button variant="ghost" size="sm" icon={Save} onClick={() => {
                             const data = { version: '4.0', timestamp: Date.now(), moduleInfo, characters, logs };
                             const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a'); a.href=url; a.download=`Save_${moduleInfo.title}_${Date.now()}.json`; a.click();
-                        }}>保存</Button>
+                        }} className="hidden md:flex">保存</Button>
                     </div>
                 </header>
 
                 {view === 'main' ? (
                     <>
                         {/* Chat Area */}
-                        <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-6 custom-scrollbar scroll-smooth">
+                        <div className="flex-1 overflow-y-auto px-3 md:px-8 py-4 md:py-6 space-y-6 custom-scrollbar scroll-smooth">
                             {logs.length === 0 && (
                                 <div className="flex flex-col items-center justify-center h-[60vh] text-slate-600 animate-slide-up">
                                     <div className="w-24 h-24 bg-gradient-to-tr from-slate-800 to-slate-900 rounded-full flex items-center justify-center mb-6 ring-1 ring-slate-700/50 shadow-2xl">
@@ -731,19 +772,19 @@
                                 const iconColor = log.charRole === '怪物' ? "text-rose-400" : (log.charRole === 'NPC' ? "text-cyan-400" : (log.charRole === 'Keeper' ? "text-indigo-400" : "text-purple-400"));
 
                                 return (
-                                    <div key={log.id} className={cn("flex w-full gap-3 group animate-slide-up", alignRight ? "flex-row-reverse" : "flex-row")}>
+                                    <div key={log.id} className={cn("flex w-full gap-2 md:gap-3 group animate-slide-up", alignRight ? "flex-row-reverse" : "flex-row")}>
                                         <div className="mt-1 shrink-0">
-                                            <div className={cn("p-2 rounded-lg bg-slate-800/80 border border-slate-700/50 shadow-lg", iconColor)}>
-                                                {getCharIcon(log.charRole, 20)}
+                                            <div className={cn("p-1.5 md:p-2 rounded-lg bg-slate-800/80 border border-slate-700/50 shadow-lg", iconColor)}>
+                                                {getCharIcon(log.charRole, window.innerWidth < 768 ? 16 : 20)}
                                             </div>
                                         </div>
                                         
-                                        <div className={cn("flex flex-col max-w-[75%]", alignRight ? "items-end" : "items-start")}>
+                                        <div className={cn("flex flex-col max-w-[80%] md:max-w-[75%]", alignRight ? "items-end" : "items-start")}>
                                             <div className="flex items-baseline gap-2 mb-1 px-1 opacity-70">
                                                 <span className="text-xs font-bold text-slate-300">{log.charName}</span>
                                                 <span className="text-[10px] text-slate-500 font-mono">{log.timestamp}</span>
                                             </div>
-                                            <div className={cn("px-5 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-md border backdrop-blur-sm relative", bubbleColor, alignRight ? "rounded-tr-none" : "rounded-tl-none")}>
+                                            <div className={cn("px-4 py-2 md:px-5 md:py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-md border backdrop-blur-sm relative", bubbleColor, alignRight ? "rounded-tr-none" : "rounded-tl-none")}>
                                                 {log.content}
                                                 <button 
                                                     onClick={() => deleteLog(log.id)}
@@ -763,12 +804,12 @@
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-6 pt-2">
-                            <div className="max-w-4xl mx-auto glass-panel rounded-2xl p-3 relative z-20 transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500/50 shadow-2xl">
+                        <div className="p-2 md:p-6 pt-0 md:pt-2 bg-slate-950/50 md:bg-transparent backdrop-blur-md md:backdrop-blur-none pb-safe">
+                            <div className="max-w-4xl mx-auto glass-panel rounded-2xl p-2 md:p-3 relative z-20 transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500/50 shadow-2xl">
                                 {/* Current Identity Tag */}
                                 <div className="absolute -top-3 left-4 bg-slate-900 text-slate-300 text-[10px] px-3 py-1 rounded-full border border-slate-700 shadow-lg flex items-center gap-2 font-medium tracking-wide z-10">
                                     <span className={cn("w-2 h-2 rounded-full animate-pulse", activeCharId === 'pc' ? "bg-indigo-500" : "bg-emerald-500")}></span>
-                                    正在扮演: <span className="text-white font-bold">{activeChar.name}</span>
+                                    正在扮演: <span className="text-white font-bold max-w-[100px] truncate">{activeChar.name}</span>
                                 </div>
 
                                 <textarea
@@ -781,19 +822,20 @@
                                         }
                                     }}
                                     placeholder={`以 ${activeChar.name} 的身份发言...`}
-                                    className="w-full bg-transparent border-none text-slate-200 placeholder-slate-600 focus:ring-0 resize-none px-4 py-3 min-h-[3.5rem] max-h-32 custom-scrollbar text-base"
+                                    className="w-full bg-transparent border-none text-slate-200 placeholder-slate-600 focus:ring-0 resize-none px-4 py-3 min-h-[3rem] max-h-24 md:max-h-32 custom-scrollbar text-sm md:text-base"
                                 />
                                 
-                                <div className="flex justify-between items-center px-2 pt-2 border-t border-white/5 mt-1">
-                                    <div className="flex items-center gap-3">
+                                <div className="flex justify-between items-center px-1 md:px-2 pt-2 border-t border-white/5 mt-1">
+                                    <div className="flex items-center gap-2 md:gap-3">
                                         <div className="flex items-center gap-2">
                                             {/* [Optimized Dice Counter] */}
                                             <DiceCounter 
                                                 value={diceCount} 
-                                                onChange={setDiceCount} 
+                                                onChange={setDiceCount}
+                                                className="scale-90 origin-left md:scale-100" 
                                             />
-                                            <span className="text-[10px] text-slate-500 font-bold mr-1">D6</span>
-                                            <button onClick={rollDice} className="p-1.5 hover:bg-slate-800 rounded-md text-slate-400 hover:text-indigo-400 transition-colors" title="投掷暗骰">
+                                            <span className="text-[10px] text-slate-500 font-bold hidden md:inline">D6</span>
+                                            <button onClick={rollDice} className="p-2 md:p-1.5 hover:bg-slate-800 rounded-md text-slate-400 hover:text-indigo-400 transition-colors" title="投掷暗骰">
                                                 <Dice5 size={18} />
                                             </button>
                                         </div>
@@ -801,7 +843,7 @@
                                             <FileText size={18} />
                                         </button>
                                     </div>
-                                    <Button onClick={() => addLog()} disabled={!inputText.trim()} size="md" icon={Send} className="rounded-lg shadow-indigo-500/20">
+                                    <Button onClick={() => addLog()} disabled={!inputText.trim()} size="sm" icon={Send} className="rounded-lg shadow-indigo-500/20 px-4">
                                         发送
                                     </Button>
                                 </div>
@@ -809,19 +851,19 @@
                         </div>
                     </>
                 ) : (
-                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar animate-fade-in">
-                         <div className="max-w-6xl mx-auto space-y-12 pb-12">
+                    <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar animate-fade-in">
+                         <div className="max-w-6xl mx-auto space-y-8 md:space-y-12 pb-12">
                             {/* Module Info */}
                             <section>
                                  <div 
                                     onClick={() => setShowModuleModal(true)}
-                                    className="group glass-card rounded-2xl p-8 cursor-pointer relative overflow-hidden"
+                                    className="group glass-card rounded-2xl p-6 md:p-8 cursor-pointer relative overflow-hidden"
                                 >
-                                    <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400">
+                                    <div className="absolute top-0 right-0 p-4 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity text-slate-400">
                                         <Edit2 size={20} />
                                     </div>
-                                    <h2 className="text-3xl font-bold text-white mb-4 group-hover:text-indigo-300 transition-colors">{moduleInfo.title}</h2>
-                                    <p className="text-slate-400 leading-relaxed max-w-3xl">
+                                    <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 md:mb-4 group-hover:text-indigo-300 transition-colors">{moduleInfo.title}</h2>
+                                    <p className="text-slate-400 leading-relaxed max-w-3xl text-sm md:text-base line-clamp-3 md:line-clamp-none">
                                         {moduleInfo.description}
                                     </p>
                                 </div>
@@ -829,8 +871,8 @@
 
                             {/* PC Section */}
                             <section>
-                                <div className="flex justify-between items-end mb-6 border-b border-white/5 pb-4">
-                                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                                <div className="flex justify-between items-end mb-4 md:mb-6 border-b border-white/5 pb-4">
+                                    <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
                                         <Users className="text-purple-400"/> 
                                         <span>调查员档案</span>
                                         <span className="text-sm font-normal text-slate-500 self-end mb-1 ml-2">{pcCharacters.length} 人</span>
@@ -845,16 +887,16 @@
                                     </Button>
                                 </div>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                                     {pcCharacters.map(inv => (
                                         <div 
                                             key={inv.id} 
                                             onClick={() => { setCharForm(inv); setModalMode('investigator'); setEditingCharId(inv.id); setShowCharModal(true); }}
-                                            className="glass-card p-6 rounded-2xl relative overflow-hidden group cursor-pointer"
+                                            className="glass-card p-5 md:p-6 rounded-2xl relative overflow-hidden group cursor-pointer"
                                         >
-                                            <div className="flex items-start gap-4 mb-6">
+                                            <div className="flex items-start gap-4 mb-4 md:mb-6">
                                                 <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/20">
-                                                    <User size={32} />
+                                                    <User size={24} className="md:w-8 md:h-8" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-bold text-white text-lg truncate group-hover:text-purple-400 transition-colors">{inv.name}</div>
@@ -862,7 +904,7 @@
                                                 </div>
                                             </div>
                                             
-                                            <div className="space-y-3 mb-6">
+                                            <div className="space-y-3 mb-4 md:mb-6">
                                                 <StatBadge label="HP (耐久)" value={inv.hp} max={Math.floor((parseInt(inv.con)+parseInt(inv.siz))/10)} color="red" icon={Heart}/>
                                                 <StatBadge label="SAN (理智)" value={inv.san} max={99} color="emerald" icon={Brain}/>
                                                 <StatBadge label="MP (魔法)" value={inv.mp} max={20} color="blue" icon={Zap}/>
@@ -884,8 +926,8 @@
 
                             {/* NPC Section */}
                             <section>
-                                <div className="flex justify-between items-end mb-6 border-b border-white/5 pb-4">
-                                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                                <div className="flex justify-between items-end mb-4 md:mb-6 border-b border-white/5 pb-4">
+                                    <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
                                         <Swords className="text-rose-400"/> 
                                         <span>NPC & 怪物</span>
                                         <span className="text-sm font-normal text-slate-500 self-end mb-1 ml-2">{npcCharacters.length} 个</span>
@@ -900,7 +942,7 @@
                                     </Button>
                                 </div>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                                     {npcCharacters.map(npc => {
                                         const isMonster = npc.role === '怪物';
                                         return (
@@ -908,13 +950,13 @@
                                             key={npc.id} 
                                             onClick={() => { setCharForm(npc); setModalMode('npc'); setEditingCharId(npc.id); setShowCharModal(true); }}
                                             className={cn(
-                                                "glass-card p-6 rounded-2xl relative overflow-hidden group cursor-pointer border-t-2",
+                                                "glass-card p-5 md:p-6 rounded-2xl relative overflow-hidden group cursor-pointer border-t-2",
                                                 isMonster ? "border-t-rose-500/50" : "border-t-cyan-500/50"
                                             )}
                                         >
-                                            <div className="flex items-start gap-4 mb-6">
+                                            <div className="flex items-start gap-4 mb-4 md:mb-6">
                                                 <div className={cn("p-3 rounded-xl border", isMonster ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-cyan-500/10 text-cyan-400 border-cyan-500/20")}>
-                                                    {isMonster ? <Swords size={32}/> : <UserCog size={32}/>}
+                                                    {isMonster ? <Swords size={24} className="md:w-8 md:h-8"/> : <UserCog size={24} className="md:w-8 md:h-8"/>}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-bold text-white text-lg truncate flex items-center gap-2">
@@ -955,18 +997,18 @@
               {/* --- MODALS --- */}
               {showModuleModal && (
                   <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4 animate-fade-in">
-                      <div className="glass-modal rounded-3xl w-full max-w-2xl flex flex-col overflow-hidden animate-slide-up">
-                          <div className="px-8 py-6 border-b border-white/10 flex justify-between items-center bg-white/5">
-                              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                      <div className="glass-modal rounded-3xl w-full max-w-2xl flex flex-col overflow-hidden animate-slide-up max-h-[90vh]">
+                          <div className="px-6 md:px-8 py-4 md:py-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+                              <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
                                   <BookOpen size={20} className="text-indigo-400"/> 编辑模组
                               </h3>
                               <button onClick={() => setShowModuleModal(false)} className="text-slate-400 hover:text-white transition-colors"><X size={24}/></button>
                           </div>
-                          <div className="p-8 space-y-6">
+                          <div className="p-6 md:p-8 space-y-6 overflow-y-auto custom-scrollbar">
                               <Input label="模组标题" value={moduleInfo.title} onChange={e => setModuleInfo({...moduleInfo, title: e.target.value})} placeholder="例如：无尽食欲..."/>
                               <Textarea label="背景故事 / 守秘人笔记" value={moduleInfo.description} onChange={e => setModuleInfo({...moduleInfo, description: e.target.value})} rows={10} placeholder="剧情大纲..."/>
                           </div>
-                          <div className="px-8 py-6 border-t border-white/10 bg-white/5 flex justify-end">
+                          <div className="px-6 md:px-8 py-4 md:py-6 border-t border-white/10 bg-white/5 flex justify-end">
                               <Button onClick={() => setShowModuleModal(false)} variant="primary" size="lg">完成</Button>
                           </div>
                       </div>
@@ -975,25 +1017,25 @@
               
               {showCharModal && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4 animate-fade-in">
-                  <div className="glass-modal rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-slide-up">
-                    <div className="px-8 py-6 border-b border-white/10 flex justify-between items-center bg-white/5">
-                      <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                  <div className="glass-modal rounded-3xl w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up">
+                    <div className="px-6 md:px-8 py-4 md:py-6 border-b border-white/10 flex justify-between items-center bg-white/5 shrink-0">
+                      <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-3">
                         <UserPlus size={24} className="text-indigo-400"/>
                         {editingCharId ? '编辑档案' : '新角色录入'}
                       </h3>
                       <button onClick={() => setShowCharModal(false)} className="text-slate-400 hover:text-white transition-colors"><X size={24}/></button>
                     </div>
                     
-                    <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+                    <div className="p-6 md:p-8 space-y-6 md:space-y-8 overflow-y-auto custom-scrollbar flex-1">
                        {/* Role Selector */}
                        {modalMode === 'npc' && (
-                           <div className="flex gap-4 p-1 bg-slate-900 rounded-xl border border-white/10 w-fit">
+                           <div className="flex gap-4 p-1 bg-slate-900 rounded-xl border border-white/10 w-full md:w-fit overflow-x-auto">
                                 {['NPC', '怪物'].map(r => (
                                     <button 
                                         key={r}
                                         onClick={() => setCharForm({...charForm, role: r})}
                                         className={cn(
-                                            "px-6 py-2 rounded-lg text-sm font-bold transition-all",
+                                            "flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap",
                                             charForm.role === r 
                                             ? (r === '怪物' ? "bg-rose-600 text-white shadow-lg" : "bg-cyan-600 text-white shadow-lg")
                                             : "text-slate-400 hover:text-white"
@@ -1013,11 +1055,11 @@
                                 <Input label="年龄/性别" value={charForm.ageSex} onChange={e => setCharForm({...charForm, ageSex: e.target.value})} />
                              </div>
                              
-                             <div className="bg-slate-900/40 p-5 rounded-2xl border border-white/5">
+                             <div className="bg-slate-900/40 p-4 md:p-5 rounded-2xl border border-white/5">
                                 <div className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-wider flex items-center gap-2">
                                     <Activity size={12}/> 基础属性 (COC 7th)
                                 </div>
-                                <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
+                                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 md:gap-4">
                                     {['str','con','siz','dex','app','int','pow','edu','luck'].map(attr => (
                                         <div key={attr} className="flex flex-col group">
                                             <label className="text-[10px] text-slate-500 uppercase font-bold mb-1 group-hover:text-indigo-400 transition-colors">{attr}</label>
@@ -1034,7 +1076,7 @@
                          </div>
                          
                          <div className="md:col-span-4 space-y-6">
-                            <div className="bg-slate-900/40 p-5 rounded-2xl border border-white/5 h-full">
+                            <div className="bg-slate-900/40 p-4 md:p-5 rounded-2xl border border-white/5 h-full">
                                 <div className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-wider">衍生状态</div>
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center p-3 bg-slate-950 rounded-xl border border-white/5">
@@ -1057,16 +1099,17 @@
                        <Textarea label="详细备注 / 物品 / 法术" value={charForm.notes} onChange={e => setCharForm({...charForm, notes: e.target.value})} rows={5}/>
                     </div>
                     
-                    <div className="px-8 py-6 border-t border-white/10 bg-white/5 flex justify-between items-center gap-4">
+                    <div className="px-6 md:px-8 py-4 md:py-6 border-t border-white/10 bg-white/5 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
                         {editingCharId ? (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full md:w-auto justify-center md:justify-start">
                                 {deleteConfirm === editingCharId ? (
                                     <>
-                                        <span className="text-xs text-red-400 font-bold animate-pulse">再次点击确认删除</span>
+                                        <span className="text-xs text-red-400 font-bold animate-pulse hidden md:inline">再次点击确认删除</span>
                                         <Button 
                                             onClick={(e) => { e.stopPropagation(); removeCharacter(editingCharId); }} 
                                             variant="dangerActive" 
                                             icon={AlertTriangle}
+                                            className="w-full md:w-auto"
                                         >
                                             确认销毁
                                         </Button>
@@ -1077,16 +1120,17 @@
                                         onClick={(e) => { e.stopPropagation(); setDeleteConfirm(editingCharId); }} 
                                         variant="danger" 
                                         icon={Trash2}
+                                        className="w-full md:w-auto"
                                     >
                                         删除档案
                                     </Button>
                                 )}
                             </div>
-                        ) : <div></div>}
+                        ) : <div className="hidden md:block"></div>}
                         
-                        <div className="flex gap-4">
-                          <Button onClick={() => setShowCharModal(false)} variant="secondary">取消</Button>
-                          <Button onClick={saveCharacter} variant="primary" icon={Check} size="lg">保存档案</Button>
+                        <div className="flex gap-4 w-full md:w-auto">
+                          <Button onClick={() => setShowCharModal(false)} variant="secondary" className="flex-1 md:flex-none">取消</Button>
+                          <Button onClick={saveCharacter} variant="primary" icon={Check} size="lg" className="flex-1 md:flex-none">保存档案</Button>
                         </div>
                     </div>
                   </div>
@@ -1129,11 +1173,11 @@
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setShowStoryModal(false)}></div>
                     <div className="bg-[#f8f9fa] rounded-3xl w-full max-w-3xl h-[85vh] flex flex-col relative z-10 shadow-2xl overflow-hidden animate-slide-up">
-                        <div className="px-8 py-5 border-b flex justify-between items-center bg-white">
+                        <div className="px-6 md:px-8 py-5 border-b flex justify-between items-center bg-white">
                             <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg"><FileText size={20} className="text-indigo-600"/> 战报预览</h3>
                             <button onClick={() => setShowStoryModal(false)}><X size={24} className="text-slate-400 hover:text-slate-800 transition-colors"/></button>
                         </div>
-                        <div className="flex-1 p-10 overflow-y-auto font-serif text-slate-800 leading-relaxed whitespace-pre-wrap text-lg bg-[#fdfdfd]">
+                        <div className="flex-1 p-6 md:p-10 overflow-y-auto font-serif text-slate-800 leading-relaxed whitespace-pre-wrap text-base md:text-lg bg-[#fdfdfd]">
                             {generateStoryText()}
                         </div>
                         <div className="p-6 border-t bg-slate-50 flex justify-end">
