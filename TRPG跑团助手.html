@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RunTable Pro - 沉浸式跑团终端</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tailwind Config for Custom Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 850: '#151e32', 950: '#020617' },
+                        indigo: { 450: '#6366f1' }, // Custom indigo
+                    },
+                    animation: {
+                        'blob': 'blob 7s infinite',
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.4s ease-out',
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                            '100%': { transform: 'translate(0px, 0px) scale(1)' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Lucide Icons (Vanilla - More stable for CDN usage) -->
+    <script src="https://unpkg.com/lucide@0.292.0/dist/umd/lucide.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+        
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background-color: #020617;
+            overflow: hidden;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(71, 85, 105, 0.4); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(99, 102, 241, 0.5); }
+        
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .glass-card:hover {
+            background: rgba(30, 41, 59, 0.6);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .glass-modal {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Animated Background */
+        .bg-gradient-animate {
+            background: radial-gradient(circle at 50% 50%, rgba(76, 29, 149, 0.15), rgba(15, 23, 42, 0));
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        
+        // --- Lucide React Polyfill ---
+        const lucideReact = (() => {
+            if (!window.lucide || !window.lucide.icons) {
+                console.warn("Lucide icons not loaded");
+                return {};
+            }
+            return Object.fromEntries(
+                Object.entries(window.lucide.icons).map(([name, iconDef]) => {
+                    const [tag, defaultAttrs, childDefs] = iconDef;
+                    const IconComponent = React.forwardRef(({ color = "currentColor", size = 24, strokeWidth = 2, className, children, ...props }, ref) => {
+                        const reactChildren = (childDefs || []).map(([childTag, childAttrs], index) => 
+                            React.createElement(childTag, { ...childAttrs, key: index })
+                        );
+                        return React.createElement(tag, {
+                            ...defaultAttrs,
+                            xmlns: "http://www.w3.org/2000/svg",
+                            width: size,
+                            height: size,
+                            viewBox: "0 0 24 24",
+                            fill: "none",
+                            stroke: color,
+                            strokeWidth: strokeWidth,
+                            strokeLinecap: "round",
+                            strokeLinejoin: "round",
+                            className: className,
+                            ref: ref,
+                            ...props
+                        }, ...reactChildren, children);
+                    });
+                    IconComponent.displayName = name;
+                    return [name, IconComponent];
+                })
+            );
+        })();
+
+        const { 
+          Save, Upload, UserPlus, FileText, Dice5, 
+          MessageSquare, Shield, Activity, Trash2, 
+          Copy, BookOpen, Settings, Users, History,
+          Edit2, Send, Mic, Home, Menu, User, Ghost, Crown, Info,
+          Zap, Heart, Brain, Smile, UserCheck, X, ChevronRight, ChevronLeft, 
+          MoreVertical, RefreshCw, LayoutTemplate, Skull, Bug, Swords, UserCog,
+          AlertTriangle, Check, Minus, Plus
+        } = lucideReact;
+
+        // --- UI Components ---
+
+        const cn = (...classes) => classes.filter(Boolean).join(' ');
+
+        const Button = ({ onClick, children, variant = 'primary', className = '', icon: Icon, disabled, title, size = 'md', active, type = "button" }) => {
+          const sizeClasses = {
+            xs: "px-2 py-1 text-xs",
+            sm: "px-3 py-1.5 text-xs",
+            md: "px-4 py-2 text-sm",
+            lg: "px-6 py-3 text-base",
+            icon: "p-2 aspect-square"
+          };
+          
+          const variants = {
+            primary: "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 border border-indigo-500/50",
+            secondary: "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-slate-500",
+            ghost: "text-slate-400 hover:text-indigo-300 hover:bg-white/5 bg-transparent border border-transparent",
+            danger: "bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 hover:border-red-500/50",
+            dangerActive: "bg-red-600 text-white border border-red-500 shadow-lg shadow-red-500/20", 
+            success: "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg border border-emerald-500/50",
+            active: "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+          };
+
+          return (
+            <button 
+              type={type}
+              onClick={onClick} 
+              disabled={disabled} 
+              title={title} 
+              className={cn(
+                "flex items-center justify-center rounded-xl font-semibold transition-all duration-200 active:scale-95",
+                "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100",
+                sizeClasses[size],
+                active ? variants.active : variants[variant],
+                className
+              )}
+            >
+              {Icon && <Icon size={size === 'icon' ? 18 : (size === 'sm' ? 14 : 16)} className={cn(children ? "mr-2" : "", "shrink-0")} />}
+              {children}
+            </button>
+          );
+        };
+
+        const Input = ({ label, value, onChange, placeholder, type = "text", className = "", min, disabled }) => (
+          <div className={cn("flex flex-col group", className)}>
+            {label && <label className="text-xs text-slate-400 mb-1.5 font-medium ml-1 group-focus-within:text-indigo-400 transition-colors">{label}</label>}
+            <input
+              type={type}
+              value={value}
+              onChange={onChange}
+              placeholder={placeholder}
+              min={min}
+              disabled={disabled}
+              className="bg-slate-900/50 border border-slate-700/50 text-slate-100 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all placeholder-slate-600 text-sm disabled:opacity-30 shadow-inner"
+            />
+          </div>
+        );
+
+        const Textarea = ({ label, value, onChange, placeholder, rows = 3, className = "" }) => (
+          <div className={cn("flex flex-col w-full group", className)}>
+            {label && <label className="text-xs text-slate-400 mb-1.5 font-medium ml-1 group-focus-within:text-indigo-400 transition-colors">{label}</label>}
+            <textarea
+              value={value}
+              onChange={onChange}
+              placeholder={placeholder}
+              rows={rows}
+              className="bg-slate-900/50 border border-slate-700/50 text-slate-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all placeholder-slate-600 text-sm resize-none custom-scrollbar shadow-inner"
+            />
+          </div>
+        );
+
+        // [New Component] Dice Counter - Replaces the ugly number input
+        const DiceCounter = ({ value, onChange, className }) => {
+            const handleDecrement = () => onChange(Math.max(1, value - 1));
+            const handleIncrement = () => onChange(Math.min(20, value + 1));
+            
+            return (
+                <div className={cn("flex items-center bg-slate-950/80 rounded-lg p-1 border border-slate-700/80 shadow-inner", className)}>
+                    <button 
+                        onClick={handleDecrement}
+                        className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors active:scale-90"
+                    >
+                        <Minus size={14} />
+                    </button>
+                    <div className="w-8 text-center text-sm font-bold text-white font-mono select-none">
+                        {value}
+                    </div>
+                     <button 
+                        onClick={handleIncrement}
+                        className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors active:scale-90"
+                    >
+                        <Plus size={14} />
+                    </button>
+                </div>
+            );
+        };
+
+        const ProgressBar = ({ value, max = 100, colorClass, bgClass, height = "h-1.5" }) => {
+            const percent = Math.min(100, Math.max(0, (value / max) * 100));
+            return (
+                <div className={`w-full ${bgClass} rounded-full overflow-hidden ${height}`}>
+                    <div 
+                        className={`h-full ${colorClass} transition-all duration-500 ease-out`} 
+                        style={{ width: `${percent}%` }}
+                    />
+                </div>
+            );
+        };
+
+        const StatBadge = ({ label, value, max = 100, color = "indigo", icon: Icon }) => {
+            const colorMap = {
+                red: { text: "text-red-400", bg: "bg-red-500", track: "bg-red-950/40" },
+                emerald: { text: "text-emerald-400", bg: "bg-emerald-500", track: "bg-emerald-950/40" },
+                blue: { text: "text-blue-400", bg: "bg-blue-500", track: "bg-blue-950/40" },
+                amber: { text: "text-amber-400", bg: "bg-amber-500", track: "bg-amber-950/40" },
+                slate: { text: "text-slate-400", bg: "bg-slate-500", track: "bg-slate-800/40" },
+            };
+            const c = colorMap[color] || colorMap.slate;
+
+            return (
+                <div className="flex flex-col min-w-[3.5rem] gap-1.5">
+                    <div className="flex items-end justify-between px-0.5">
+                        <div className="flex items-center gap-1">
+                             {Icon && <Icon size={10} className="text-slate-500" />}
+                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{label}</span>
+                        </div>
+                        <span className={cn("font-bold text-sm leading-none font-mono", c.text)}>{value}</span>
+                    </div>
+                    <ProgressBar value={value} max={max} colorClass={c.bg} bgClass={c.track} />
+                </div>
+            );
+        };
+
+        // --- 主程序 ---
+
+        const App = () => {
+          const [view, setView] = useState('main'); 
+          const [characters, setCharacters] = useState([]);
+          const [logs, setLogs] = useState([]);
+          const [moduleInfo, setModuleInfo] = useState({ title: '深潜者之影', description: '这是一个关于在沿海小镇发生的神秘失踪案件...', notes: '' });
+          
+          const [activeCharId, setActiveCharId] = useState('pc');
+          const [inputText, setInputText] = useState('');
+          const [diceCount, setDiceCount] = useState(1);
+          const [sidebarOpen, setSidebarOpen] = useState(true);
+          const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+          const [showModuleModal, setShowModuleModal] = useState(false);
+          const [showCharModal, setShowCharModal] = useState(false);
+          const [modalMode, setModalMode] = useState('investigator'); 
+          
+          const [showStoryModal, setShowStoryModal] = useState(false);
+          const [showStatusEditModal, setShowStatusEditModal] = useState(false);
+          const [editingCharId, setEditingCharId] = useState(null); 
+          const [statusEditTargetId, setStatusEditTargetId] = useState(null);
+          
+          const initialCharState = { 
+            name: '', role: '调查员', player: '', job: '', ageSex: '',
+            str: 50, con: 50, siz: 50, dex: 50, app: 50, int: 50, pow: 50, edu: 50, luck: 50,
+            hp: 10, san: 50, mp: 10, notes: '' 
+          };
+          const [charForm, setCharForm] = useState(initialCharState);
+          const [statusForm, setStatusForm] = useState({ hp: 0, san: 0, mp: 0 });
+
+          const logsEndRef = useRef(null);
+
+          useEffect(() => {
+            if (view === 'main') logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          }, [logs, view]);
+
+          useEffect(() => {
+            if (showCharModal && !editingCharId) {
+                const con = parseInt(charForm.con || 0);
+                const siz = parseInt(charForm.siz || 0);
+                const pow = parseInt(charForm.pow || 0);
+                
+                const hp = Math.floor((con + siz) / 10);
+                const mp = Math.floor(pow / 5); 
+                
+                setCharForm(prev => ({
+                    ...prev,
+                    hp: hp,
+                    san: pow, 
+                    mp: mp
+                }));
+            }
+          }, [charForm.str, charForm.con, charForm.siz, charForm.int, charForm.pow, showCharModal, editingCharId]);
+
+          const saveCharacter = () => {
+            if (!charForm.name.trim()) return;
+            
+            const finalChar = {
+                ...charForm,
+                hp: parseInt(charForm.hp) || 0,
+                san: parseInt(charForm.san) || 0,
+                mp: parseInt(charForm.mp) || 0,
+            };
+
+            if (editingCharId) {
+              setCharacters(prev => prev.map(c => c.id === editingCharId ? { ...finalChar, id: editingCharId } : c));
+              addLog('system', `守秘人 更新了 [${finalChar.name}] 的档案`);
+            } else {
+              const id = Date.now().toString();
+              setCharacters(prev => [...prev, { ...finalChar, id }]);
+              addLog('system', `新角色录入: ${finalChar.name} (${finalChar.role})`);
+            }
+            
+            setEditingCharId(null);
+            setShowCharModal(false);
+            setCharForm(initialCharState);
+            setDeleteConfirm(null);
+          };
+
+          const removeCharacter = (id) => {
+             setCharacters(prev => prev.filter(c => c.id !== id));
+             if (activeCharId === id) setActiveCharId('pc');
+             setShowCharModal(false);
+             setEditingCharId(null);
+             setDeleteConfirm(null);
+             addLog('system', `档案已删除`);
+          };
+
+          const updateInvStatus = () => {
+            if (!statusEditTargetId) return;
+            const inv = characters.find(c => c.id === statusEditTargetId);
+            if (!inv) return;
+
+            const newHp = parseInt(statusForm.hp);
+            const newSan = parseInt(statusForm.san);
+            const newMp = parseInt(statusForm.mp);
+            const changes = [];
+            
+            if (newHp !== inv.hp) changes.push(`HP ${newHp > inv.hp ? '+' : ''}${newHp - inv.hp}`);
+            if (newSan !== inv.san) changes.push(`SAN ${newSan > inv.san ? '+' : ''}${newSan - inv.san}`);
+            
+            if (changes.length > 0) {
+                setCharacters(prev => prev.map(c => c.id === inv.id ? { ...c, hp: newHp, san: newSan, mp: newMp } : c));
+                addLog('status', `${inv.name} 状态变更: ${changes.join(', ')}`, { customCharId: inv.id });
+            }
+            setShowStatusEditModal(false);
+            setStatusEditTargetId(null);
+          };
+
+          const addLog = (type = 'normal', content = inputText, options = {}) => {
+            if (!content.trim()) return;
+            const targetId = options.customCharId || activeCharId;
+            const isMainPC = targetId === 'pc';
+            const char = characters.find(c => c.id === targetId);
+            
+            const newLog = {
+              id: Date.now(),
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              charId: targetId,
+              charName: isMainPC ? '守秘人' : (char ? char.name : '未知'),
+              charRole: isMainPC ? 'Keeper' : (char ? char.role : 'Unknown'),
+              type: type, 
+              content: content
+            };
+
+            setLogs(prev => [...prev, newLog]);
+            if (!['system', 'status', 'dice'].includes(type)) setInputText('');
+          };
+
+          const deleteLog = (logId) => setLogs(prev => prev.filter(l => l.id !== logId));
+
+          const rollDice = () => {
+            const count = Math.max(1, parseInt(diceCount) || 1);
+            let total = 0;
+            let details = [];
+            for(let i=0; i<count; i++) {
+              const roll = Math.floor(Math.random() * 6) + 1;
+              total += roll;
+              details.push(roll);
+            }
+            // 优化 Log 内容格式
+            addLog('dice', JSON.stringify({ count, total, details }), { customCharId: 'pc' });
+          };
+
+          const generateStoryText = () => {
+            if (logs.length === 0) return "暂无记录。";
+            return logs.map(log => {
+                if (log.type === 'dice') {
+                    try {
+                        const d = JSON.parse(log.content);
+                        return `> [系统] 投掷了 ${d.count}D6: ${d.total} [${d.details.join(', ')}]`;
+                    } catch(e) { return `> [系统] ${log.content}`; }
+                }
+                if (['system', 'status'].includes(log.type)) return `> [${log.charName}] ${log.content}`;
+                return `**${log.charName}**: ${log.content}`;
+            }).join('\n\n');
+          };
+
+          const pcCharacters = characters.filter(c => c.role === '调查员');
+          const npcCharacters = characters.filter(c => c.role === 'NPC' || c.role === '怪物');
+          
+          const getActiveCharInfo = () => {
+            if (activeCharId === 'pc') return { name: '守秘人', role: 'Keeper' };
+            return characters.find(c => c.id === activeCharId) || { name: '未知', role: 'Unknown' };
+          };
+          const activeChar = getActiveCharInfo();
+
+          // Helper to get icon for char
+          const getCharIcon = (role, size = 18) => {
+              if (role === 'Keeper') return <Crown size={size} />;
+              if (role === '怪物') return <Swords size={size} />;
+              if (role === 'NPC') return <UserCog size={size} />;
+              return <User size={size} />;
+          }
+
+          return (
+            <div className="flex h-screen text-slate-200 font-sans selection:bg-indigo-500/30 overflow-hidden bg-[#020617]">
+              
+              <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+                 <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-purple-900/20 rounded-full blur-[100px] animate-blob"></div>
+                 <div className="absolute bottom-[10%] right-[-5%] w-[30rem] h-[30rem] bg-indigo-900/10 rounded-full blur-[120px] animate-blob" style={{animationDelay: '2s'}}></div>
+                 <div className="absolute top-[40%] left-[30%] w-72 h-72 bg-slate-800/20 rounded-full blur-[80px] animate-blob" style={{animationDelay: '4s'}}></div>
+              </div>
+
+              {/* --- SIDEBAR --- */}
+              <aside className={cn(
+                  "glass-panel border-r-0 border-y-0 border-l-0 flex flex-col transition-all duration-500 ease-in-out z-30 shrink-0 relative",
+                  sidebarOpen ? "w-72" : "w-18"
+              )}>
+                {/* Header */}
+                <div className="h-20 flex items-center justify-center px-4 border-b border-white/5 bg-slate-900/30 backdrop-blur-md">
+                  <div className="flex items-center gap-3 text-indigo-400 overflow-hidden w-full justify-center">
+                    <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2.5 rounded-xl text-white shrink-0 shadow-lg shadow-indigo-500/20">
+                       <Dice5 size={24} />
+                    </div>
+                    {sidebarOpen && (
+                        <div className="flex flex-col animate-fade-in flex-1">
+                            <span className="font-bold text-lg tracking-tight text-white whitespace-nowrap">RunTable</span>
+                            <span className="text-[10px] text-indigo-300 font-medium tracking-widest uppercase">Pro Edition</span>
+                        </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Nav */}
+                <div className="p-3 space-y-2">
+                    {[
+                        { id: 'main', icon: MessageSquare, label: '现场 & 通讯' },
+                        { id: 'setup', icon: Users, label: '角色 & 模组' }
+                    ].map(nav => (
+                        <button 
+                            key={nav.id}
+                            onClick={() => setView(nav.id)}
+                            className={cn(
+                                "w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group", 
+                                view === nav.id 
+                                ? "bg-indigo-600/10 text-indigo-300 border border-indigo-500/20" 
+                                : "text-slate-400 hover:text-white hover:bg-white/5 border border-transparent",
+                                !sidebarOpen && "justify-center"
+                            )}
+                            title={nav.label}
+                        >
+                            <nav.icon size={20} className={cn("transition-colors", view === nav.id ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300")} />
+                            {sidebarOpen && <span className="font-medium text-sm">{nav.label}</span>}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Char List (Reverted Icons) */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-3 pb-4 space-y-6">
+                     <div className="flex flex-col gap-2">
+                        {sidebarOpen && <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">当前扮演</div>}
+                        
+                        <div 
+                           onClick={() => setActiveCharId('pc')}
+                           className={cn(
+                               "relative group flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-all duration-300 border",
+                               activeCharId === 'pc' 
+                               ? "bg-gradient-to-r from-indigo-500/20 to-transparent border-indigo-500/30 shadow-[inset_2px_0_0_0_#6366f1]" 
+                               : "bg-transparent border-transparent hover:bg-white/5",
+                               !sidebarOpen && "justify-center"
+                           )}
+                        >
+                           <div className={cn("p-2 rounded-lg shrink-0 transition-colors", activeCharId === 'pc' ? "bg-indigo-500 text-white" : "bg-slate-800 text-slate-400 group-hover:bg-slate-700")}>
+                               <Crown size={18} />
+                           </div>
+                           {sidebarOpen && (
+                               <div className="overflow-hidden animate-fade-in">
+                                   <div className={cn("font-bold text-sm truncate", activeCharId === 'pc' ? "text-white" : "text-slate-300")}>守秘人</div>
+                                   <div className="text-[10px] text-slate-500 truncate">Game Master</div>
+                               </div>
+                           )}
+                           {activeCharId === 'pc' && sidebarOpen && <div className="absolute right-2 w-1.5 h-1.5 rounded-full bg-indigo-400 shadow-[0_0_10px_#6366f1]"></div>}
+                        </div>
+                     </div>
+
+                     <div className="space-y-2">
+                        {sidebarOpen && <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1 flex justify-between">
+                            <span>角色列表</span>
+                            <span className="text-[10px] bg-slate-800 px-1.5 rounded text-slate-400">{pcCharacters.length + npcCharacters.length}</span>
+                        </div>}
+
+                        {[...pcCharacters, ...npcCharacters].map(char => {
+                            const isMonster = char.role === '怪物';
+                            const isNPC = char.role === 'NPC';
+                            // Dynamic colors based on role
+                            const activeBorder = isMonster ? 'border-rose-500/30' : (isNPC ? 'border-cyan-500/30' : 'border-purple-500/30');
+                            const activeBg = isMonster ? 'from-rose-500/20' : (isNPC ? 'from-cyan-500/20' : 'from-purple-500/20');
+                            const iconBg = isMonster 
+                                ? (activeCharId === char.id ? "bg-rose-600 text-white" : "bg-slate-800 text-slate-400 group-hover:bg-rose-900/50 group-hover:text-rose-400")
+                                : (isNPC 
+                                    ? (activeCharId === char.id ? "bg-cyan-600 text-white" : "bg-slate-800 text-slate-400 group-hover:bg-cyan-900/50 group-hover:text-cyan-400")
+                                    : (activeCharId === char.id ? "bg-purple-600 text-white" : "bg-slate-800 text-slate-400 group-hover:bg-purple-900/50 group-hover:text-purple-400"));
+
+                             return (
+                                <div 
+                                    key={char.id}
+                                    onClick={() => setActiveCharId(char.id)}
+                                    className={cn(
+                                        "relative group flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-all duration-300 border",
+                                        activeCharId === char.id 
+                                        ? `bg-gradient-to-r ${activeBg} to-transparent ${activeBorder}` 
+                                        : "bg-transparent border-transparent hover:bg-white/5",
+                                        !sidebarOpen && "justify-center"
+                                    )}
+                                >
+                                    <div className={cn("p-2 rounded-lg shrink-0 transition-colors", iconBg)}>
+                                        {getCharIcon(char.role, 18)}
+                                    </div>
+                                    
+                                    {sidebarOpen && (
+                                        <div className="flex-1 overflow-hidden animate-fade-in">
+                                            <div className={cn("font-bold text-sm truncate transition-colors", activeCharId === char.id ? "text-white" : "text-slate-300")}>{char.name}</div>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-[10px] text-slate-500">{char.role}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {sidebarOpen && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); setStatusForm({hp: char.hp, san: char.san, mp: char.mp}); setStatusEditTargetId(char.id); setShowStatusEditModal(true); }}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-all"
+                                        >
+                                            <Activity size={14} />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                     </div>
+                </div>
+
+                {/* Footer Toggle */}
+                <div className="p-4 border-t border-white/5">
+                    <button onClick={() => setSidebarOpen(!sidebarOpen)} className="w-full flex items-center justify-center p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+                        {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                    </button>
+                </div>
+              </aside>
+
+              {/* --- MAIN CONTENT --- */}
+              <main className="flex-1 flex flex-col relative min-w-0 z-10">
+                
+                {/* Top Bar */}
+                <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 backdrop-blur-sm sticky top-0 z-20">
+                    <div className="flex flex-col justify-center">
+                        <h1 className="text-white font-bold text-xl tracking-tight">{moduleInfo.title || "未命名模组"}</h1>
+                        <p className="text-xs text-slate-500 truncate max-w-md mt-1">{moduleInfo.description || "暂无描述"}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Button variant="ghost" size="sm" icon={Upload} title="读取存档" className="relative overflow-hidden">
+                             <input type="file" accept=".json" onChange={(e) => {
+                                const file = e.target.files[0];
+                                if(!file) return;
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                    try {
+                                        const d = JSON.parse(ev.target.result);
+                                        if(d.moduleInfo) setModuleInfo(d.moduleInfo);
+                                        if(d.characters) setCharacters(d.characters);
+                                        if(d.logs) setLogs(d.logs);
+                                        setView('main');
+                                    } catch(err){ alert("存档损坏"); }
+                                };
+                                reader.readAsText(file);
+                             }} className="absolute inset-0 opacity-0 cursor-pointer"/>
+                             导入
+                        </Button>
+                        <Button variant="ghost" size="sm" icon={Save} onClick={() => {
+                            const data = { version: '4.0', timestamp: Date.now(), moduleInfo, characters, logs };
+                            const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a'); a.href=url; a.download=`Save_${moduleInfo.title}_${Date.now()}.json`; a.click();
+                        }}>保存</Button>
+                    </div>
+                </header>
+
+                {view === 'main' ? (
+                    <>
+                        {/* Chat Area */}
+                        <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-6 custom-scrollbar scroll-smooth">
+                            {logs.length === 0 && (
+                                <div className="flex flex-col items-center justify-center h-[60vh] text-slate-600 animate-slide-up">
+                                    <div className="w-24 h-24 bg-gradient-to-tr from-slate-800 to-slate-900 rounded-full flex items-center justify-center mb-6 ring-1 ring-slate-700/50 shadow-2xl">
+                                        <BookOpen size={40} className="text-slate-500 opacity-50" />
+                                    </div>
+                                    <p className="text-lg font-medium text-slate-500">传奇故事，由此开始</p>
+                                </div>
+                            )}
+
+                            {logs.map((log) => {
+                                const isPC = log.charId === 'pc'; 
+                                const isSystem = log.type === 'system';
+                                const isDice = log.type === 'dice';
+                                const isStatus = log.type === 'status';
+
+                                if (isSystem || isStatus) {
+                                    return (
+                                        <div key={log.id} className="flex justify-center py-2 animate-fade-in">
+                                            <div className={cn(
+                                                "text-xs px-4 py-1.5 rounded-full border flex items-center gap-2 shadow-sm backdrop-blur-sm",
+                                                isStatus ? "bg-red-500/10 border-red-500/20 text-red-300" : "bg-slate-800/60 border-slate-700/50 text-slate-400"
+                                            )}>
+                                                {isStatus ? <Activity size={12} /> : <Info size={12} />}
+                                                <span className="font-mono">{log.content}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                if (isDice) {
+                                     // [Optimized Dice Log]
+                                     let diceData = { count: '?', total: '?', details: [] };
+                                     try { diceData = JSON.parse(log.content); } catch(e) { diceData.total = log.content; }
+                                     
+                                     return (
+                                        <div key={log.id} className="flex flex-col items-center py-4 animate-slide-up">
+                                            <div className="relative overflow-hidden bg-slate-900 rounded-xl border-l-4 border-indigo-500 shadow-2xl p-4 min-w-[260px] max-w-sm w-full">
+                                                {/* Background Watermark */}
+                                                <Dice5 className="absolute -right-4 -bottom-4 text-indigo-500/10 w-32 h-32 transform rotate-12" />
+                                                
+                                                <div className="flex justify-between items-center mb-2 relative z-10">
+                                                    <span className="text-[10px] font-bold tracking-widest text-indigo-400 uppercase">Dice Roll</span>
+                                                    <span className="text-xs text-slate-500 font-mono">{log.timestamp}</span>
+                                                </div>
+                                                
+                                                <div className="flex items-baseline gap-3 relative z-10">
+                                                    <span className="text-slate-400 text-sm font-medium">投掷了</span>
+                                                    <span className="text-white text-lg font-bold">{diceData.count}D6</span>
+                                                    <span className="text-slate-600">:</span>
+                                                    <span className="text-4xl font-black text-indigo-400 font-mono">{diceData.total}</span>
+                                                </div>
+                                                
+                                                {diceData.details && diceData.details.length > 0 && (
+                                                    <div className="mt-3 pt-2 border-t border-slate-800 relative z-10">
+                                                        <div className="flex flex-wrap gap-1 text-xs font-mono text-slate-500">
+                                                            {diceData.details.map((d, i) => (
+                                                                <span key={i} className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">{d}</span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                // 聊天气泡逻辑 (Reverted Avatars)
+                                const bubbleColor = log.charRole === 'Keeper' 
+                                    ? "bg-indigo-600 text-white border-indigo-500 shadow-indigo-500/10" 
+                                    : (log.charRole === '怪物' 
+                                        ? "bg-rose-900/80 text-rose-100 border-rose-800 shadow-rose-900/10" 
+                                        : (log.charRole === 'NPC' 
+                                            ? "bg-slate-800 text-slate-200 border-slate-700 shadow-slate-900/10"
+                                            : "bg-slate-700/80 text-white border-slate-600")); // 调查员
+
+                                const alignRight = isPC; // Keeper在右侧
+                                const iconColor = log.charRole === '怪物' ? "text-rose-400" : (log.charRole === 'NPC' ? "text-cyan-400" : (log.charRole === 'Keeper' ? "text-indigo-400" : "text-purple-400"));
+
+                                return (
+                                    <div key={log.id} className={cn("flex w-full gap-3 group animate-slide-up", alignRight ? "flex-row-reverse" : "flex-row")}>
+                                        <div className="mt-1 shrink-0">
+                                            <div className={cn("p-2 rounded-lg bg-slate-800/80 border border-slate-700/50 shadow-lg", iconColor)}>
+                                                {getCharIcon(log.charRole, 20)}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className={cn("flex flex-col max-w-[75%]", alignRight ? "items-end" : "items-start")}>
+                                            <div className="flex items-baseline gap-2 mb-1 px-1 opacity-70">
+                                                <span className="text-xs font-bold text-slate-300">{log.charName}</span>
+                                                <span className="text-[10px] text-slate-500 font-mono">{log.timestamp}</span>
+                                            </div>
+                                            <div className={cn("px-5 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-md border backdrop-blur-sm relative", bubbleColor, alignRight ? "rounded-tr-none" : "rounded-tl-none")}>
+                                                {log.content}
+                                                <button 
+                                                    onClick={() => deleteLog(log.id)}
+                                                    className={cn(
+                                                        "absolute top-2 p-1.5 rounded-full bg-slate-950/50 text-slate-400 hover:text-red-400 hover:bg-slate-900 transition-all opacity-0 group-hover:opacity-100",
+                                                        alignRight ? "-left-10" : "-right-10"
+                                                    )}
+                                                >
+                                                    <Trash2 size={12}/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            <div ref={logsEndRef} />
+                        </div>
+
+                        {/* Input Area */}
+                        <div className="p-6 pt-2">
+                            <div className="max-w-4xl mx-auto glass-panel rounded-2xl p-3 relative z-20 transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500/50 shadow-2xl">
+                                {/* Current Identity Tag */}
+                                <div className="absolute -top-3 left-4 bg-slate-900 text-slate-300 text-[10px] px-3 py-1 rounded-full border border-slate-700 shadow-lg flex items-center gap-2 font-medium tracking-wide z-10">
+                                    <span className={cn("w-2 h-2 rounded-full animate-pulse", activeCharId === 'pc' ? "bg-indigo-500" : "bg-emerald-500")}></span>
+                                    正在扮演: <span className="text-white font-bold">{activeChar.name}</span>
+                                </div>
+
+                                <textarea
+                                    value={inputText}
+                                    onChange={(e) => setInputText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if(e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            addLog();
+                                        }
+                                    }}
+                                    placeholder={`以 ${activeChar.name} 的身份发言...`}
+                                    className="w-full bg-transparent border-none text-slate-200 placeholder-slate-600 focus:ring-0 resize-none px-4 py-3 min-h-[3.5rem] max-h-32 custom-scrollbar text-base"
+                                />
+                                
+                                <div className="flex justify-between items-center px-2 pt-2 border-t border-white/5 mt-1">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2">
+                                            {/* [Optimized Dice Counter] */}
+                                            <DiceCounter 
+                                                value={diceCount} 
+                                                onChange={setDiceCount} 
+                                            />
+                                            <span className="text-[10px] text-slate-500 font-bold mr-1">D6</span>
+                                            <button onClick={rollDice} className="p-1.5 hover:bg-slate-800 rounded-md text-slate-400 hover:text-indigo-400 transition-colors" title="投掷暗骰">
+                                                <Dice5 size={18} />
+                                            </button>
+                                        </div>
+                                        <button onClick={() => setShowStoryModal(true)} className="p-2 text-slate-500 hover:text-slate-300 transition-colors hover:bg-white/5 rounded-lg" title="战报预览">
+                                            <FileText size={18} />
+                                        </button>
+                                    </div>
+                                    <Button onClick={() => addLog()} disabled={!inputText.trim()} size="md" icon={Send} className="rounded-lg shadow-indigo-500/20">
+                                        发送
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar animate-fade-in">
+                         <div className="max-w-6xl mx-auto space-y-12 pb-12">
+                            {/* Module Info */}
+                            <section>
+                                 <div 
+                                    onClick={() => setShowModuleModal(true)}
+                                    className="group glass-card rounded-2xl p-8 cursor-pointer relative overflow-hidden"
+                                >
+                                    <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400">
+                                        <Edit2 size={20} />
+                                    </div>
+                                    <h2 className="text-3xl font-bold text-white mb-4 group-hover:text-indigo-300 transition-colors">{moduleInfo.title}</h2>
+                                    <p className="text-slate-400 leading-relaxed max-w-3xl">
+                                        {moduleInfo.description}
+                                    </p>
+                                </div>
+                            </section>
+
+                            {/* PC Section */}
+                            <section>
+                                <div className="flex justify-between items-end mb-6 border-b border-white/5 pb-4">
+                                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                                        <Users className="text-purple-400"/> 
+                                        <span>调查员档案</span>
+                                        <span className="text-sm font-normal text-slate-500 self-end mb-1 ml-2">{pcCharacters.length} 人</span>
+                                    </h2>
+                                    <Button onClick={() => { 
+                                        setCharForm({...initialCharState, role: '调查员'}); 
+                                        setModalMode('investigator');
+                                        setEditingCharId(null); 
+                                        setShowCharModal(true); 
+                                    }} icon={UserPlus} size="sm" variant="secondary">
+                                        录入
+                                    </Button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {pcCharacters.map(inv => (
+                                        <div 
+                                            key={inv.id} 
+                                            onClick={() => { setCharForm(inv); setModalMode('investigator'); setEditingCharId(inv.id); setShowCharModal(true); }}
+                                            className="glass-card p-6 rounded-2xl relative overflow-hidden group cursor-pointer"
+                                        >
+                                            <div className="flex items-start gap-4 mb-6">
+                                                <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/20">
+                                                    <User size={32} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-bold text-white text-lg truncate group-hover:text-purple-400 transition-colors">{inv.name}</div>
+                                                    <div className="text-xs text-slate-400 mt-1">{inv.job || "无业"} · {inv.ageSex || "未知"}</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="space-y-3 mb-6">
+                                                <StatBadge label="HP (耐久)" value={inv.hp} max={Math.floor((parseInt(inv.con)+parseInt(inv.siz))/10)} color="red" icon={Heart}/>
+                                                <StatBadge label="SAN (理智)" value={inv.san} max={99} color="emerald" icon={Brain}/>
+                                                <StatBadge label="MP (魔法)" value={inv.mp} max={20} color="blue" icon={Zap}/>
+                                            </div>
+                                            
+                                            <div className="text-xs text-slate-500 line-clamp-2 bg-slate-950/30 p-3 rounded-xl border border-white/5 min-h-[3.5rem]">
+                                                {inv.notes || "暂无备注..."}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {pcCharacters.length === 0 && (
+                                        <div className="col-span-full py-12 border-2 border-dashed border-slate-800 rounded-2xl flex flex-col items-center justify-center text-slate-600">
+                                            <Ghost size={48} className="mb-4 opacity-20"/>
+                                            <span>暂无调查员数据</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+
+                            {/* NPC Section */}
+                            <section>
+                                <div className="flex justify-between items-end mb-6 border-b border-white/5 pb-4">
+                                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                                        <Swords className="text-rose-400"/> 
+                                        <span>NPC & 怪物</span>
+                                        <span className="text-sm font-normal text-slate-500 self-end mb-1 ml-2">{npcCharacters.length} 个</span>
+                                    </h2>
+                                    <Button onClick={() => { 
+                                        setCharForm({...initialCharState, role: 'NPC'}); 
+                                        setModalMode('npc');
+                                        setEditingCharId(null); 
+                                        setShowCharModal(true); 
+                                    }} icon={UserPlus} size="sm" variant="secondary">
+                                        录入
+                                    </Button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {npcCharacters.map(npc => {
+                                        const isMonster = npc.role === '怪物';
+                                        return (
+                                        <div 
+                                            key={npc.id} 
+                                            onClick={() => { setCharForm(npc); setModalMode('npc'); setEditingCharId(npc.id); setShowCharModal(true); }}
+                                            className={cn(
+                                                "glass-card p-6 rounded-2xl relative overflow-hidden group cursor-pointer border-t-2",
+                                                isMonster ? "border-t-rose-500/50" : "border-t-cyan-500/50"
+                                            )}
+                                        >
+                                            <div className="flex items-start gap-4 mb-6">
+                                                <div className={cn("p-3 rounded-xl border", isMonster ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-cyan-500/10 text-cyan-400 border-cyan-500/20")}>
+                                                    {isMonster ? <Swords size={32}/> : <UserCog size={32}/>}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-bold text-white text-lg truncate flex items-center gap-2">
+                                                        {npc.name}
+                                                        <span className={cn("text-[10px] px-1.5 py-0.5 rounded border", isMonster ? "border-rose-800 text-rose-400 bg-rose-950" : "border-cyan-800 text-cyan-400 bg-cyan-950")}>{npc.role}</span>
+                                                    </div>
+                                                    <div className="text-xs text-slate-400 mt-1">{npc.job || "未知实体"}</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                                <StatBadge label="HP" value={npc.hp} max={50} color="red" icon={Heart}/>
+                                                <StatBadge label="MP" value={npc.mp} max={20} color="blue" icon={Zap}/>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                                <div className="bg-slate-950/40 rounded px-2 py-1 flex justify-between items-center border border-white/5">
+                                                    <span className="text-[10px] text-slate-500 font-bold">STR</span><span className="text-sm font-mono text-slate-300">{npc.str}</span>
+                                                </div>
+                                                <div className="bg-slate-950/40 rounded px-2 py-1 flex justify-between items-center border border-white/5">
+                                                    <span className="text-[10px] text-slate-500 font-bold">DEX</span><span className="text-sm font-mono text-slate-300">{npc.dex}</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="text-xs text-slate-500 line-clamp-2 bg-slate-950/30 p-3 rounded-xl border border-white/5 min-h-[3.5rem]">
+                                                {npc.notes || "..."}
+                                            </div>
+                                        </div>
+                                    );
+                                    })}
+                                </div>
+                            </section>
+                         </div>
+                    </div>
+                )}
+
+              </main>
+
+              {/* --- MODALS --- */}
+              {showModuleModal && (
+                  <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4 animate-fade-in">
+                      <div className="glass-modal rounded-3xl w-full max-w-2xl flex flex-col overflow-hidden animate-slide-up">
+                          <div className="px-8 py-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+                              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                  <BookOpen size={20} className="text-indigo-400"/> 编辑模组
+                              </h3>
+                              <button onClick={() => setShowModuleModal(false)} className="text-slate-400 hover:text-white transition-colors"><X size={24}/></button>
+                          </div>
+                          <div className="p-8 space-y-6">
+                              <Input label="模组标题" value={moduleInfo.title} onChange={e => setModuleInfo({...moduleInfo, title: e.target.value})} placeholder="例如：无尽食欲..."/>
+                              <Textarea label="背景故事 / 守秘人笔记" value={moduleInfo.description} onChange={e => setModuleInfo({...moduleInfo, description: e.target.value})} rows={10} placeholder="剧情大纲..."/>
+                          </div>
+                          <div className="px-8 py-6 border-t border-white/10 bg-white/5 flex justify-end">
+                              <Button onClick={() => setShowModuleModal(false)} variant="primary" size="lg">完成</Button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+              
+              {showCharModal && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4 animate-fade-in">
+                  <div className="glass-modal rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-slide-up">
+                    <div className="px-8 py-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+                      <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                        <UserPlus size={24} className="text-indigo-400"/>
+                        {editingCharId ? '编辑档案' : '新角色录入'}
+                      </h3>
+                      <button onClick={() => setShowCharModal(false)} className="text-slate-400 hover:text-white transition-colors"><X size={24}/></button>
+                    </div>
+                    
+                    <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+                       {/* Role Selector */}
+                       {modalMode === 'npc' && (
+                           <div className="flex gap-4 p-1 bg-slate-900 rounded-xl border border-white/10 w-fit">
+                                {['NPC', '怪物'].map(r => (
+                                    <button 
+                                        key={r}
+                                        onClick={() => setCharForm({...charForm, role: r})}
+                                        className={cn(
+                                            "px-6 py-2 rounded-lg text-sm font-bold transition-all",
+                                            charForm.role === r 
+                                            ? (r === '怪物' ? "bg-rose-600 text-white shadow-lg" : "bg-cyan-600 text-white shadow-lg")
+                                            : "text-slate-400 hover:text-white"
+                                        )}
+                                    >
+                                        {r}
+                                    </button>
+                                ))}
+                           </div>
+                       )}
+
+                       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                         <div className="md:col-span-8 space-y-6">
+                             <div className="grid grid-cols-2 gap-4">
+                                <Input label="姓名" value={charForm.name} onChange={e => setCharForm({...charForm, name: e.target.value})} className="col-span-2"/>
+                                <Input label="职业/种族" value={charForm.job} onChange={e => setCharForm({...charForm, job: e.target.value})} />
+                                <Input label="年龄/性别" value={charForm.ageSex} onChange={e => setCharForm({...charForm, ageSex: e.target.value})} />
+                             </div>
+                             
+                             <div className="bg-slate-900/40 p-5 rounded-2xl border border-white/5">
+                                <div className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-wider flex items-center gap-2">
+                                    <Activity size={12}/> 基础属性 (COC 7th)
+                                </div>
+                                <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
+                                    {['str','con','siz','dex','app','int','pow','edu','luck'].map(attr => (
+                                        <div key={attr} className="flex flex-col group">
+                                            <label className="text-[10px] text-slate-500 uppercase font-bold mb-1 group-hover:text-indigo-400 transition-colors">{attr}</label>
+                                            <input 
+                                                type="number" 
+                                                value={charForm[attr]} 
+                                                onChange={e => setCharForm({...charForm, [attr]: e.target.value})}
+                                                className="bg-slate-950 border border-slate-700 text-center rounded-lg py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-white font-mono"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                             </div>
+                         </div>
+                         
+                         <div className="md:col-span-4 space-y-6">
+                            <div className="bg-slate-900/40 p-5 rounded-2xl border border-white/5 h-full">
+                                <div className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-wider">衍生状态</div>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center p-3 bg-slate-950 rounded-xl border border-white/5">
+                                        <label className="font-bold text-red-400 text-sm">HP</label>
+                                        <input type="number" value={charForm.hp} onChange={e => setCharForm({...charForm, hp: e.target.value})} className="w-16 bg-transparent text-right text-white font-mono focus:outline-none border-b border-slate-700 focus:border-red-500"/>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-slate-950 rounded-xl border border-white/5">
+                                        <label className="font-bold text-emerald-400 text-sm">SAN</label>
+                                        <input type="number" value={charForm.san} onChange={e => setCharForm({...charForm, san: e.target.value})} className="w-16 bg-transparent text-right text-white font-mono focus:outline-none border-b border-slate-700 focus:border-emerald-500"/>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-slate-950 rounded-xl border border-white/5">
+                                        <label className="font-bold text-blue-400 text-sm">MP</label>
+                                        <input type="number" value={charForm.mp} onChange={e => setCharForm({...charForm, mp: e.target.value})} className="w-16 bg-transparent text-right text-white font-mono focus:outline-none border-b border-slate-700 focus:border-blue-500"/>
+                                    </div>
+                                </div>
+                            </div>
+                         </div>
+                       </div>
+
+                       <Textarea label="详细备注 / 物品 / 法术" value={charForm.notes} onChange={e => setCharForm({...charForm, notes: e.target.value})} rows={5}/>
+                    </div>
+                    
+                    <div className="px-8 py-6 border-t border-white/10 bg-white/5 flex justify-between items-center gap-4">
+                        {editingCharId ? (
+                            <div className="flex items-center gap-2">
+                                {deleteConfirm === editingCharId ? (
+                                    <>
+                                        <span className="text-xs text-red-400 font-bold animate-pulse">再次点击确认删除</span>
+                                        <Button 
+                                            onClick={(e) => { e.stopPropagation(); removeCharacter(editingCharId); }} 
+                                            variant="dangerActive" 
+                                            icon={AlertTriangle}
+                                        >
+                                            确认销毁
+                                        </Button>
+                                        <Button onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); }} variant="ghost" size="sm">取消</Button>
+                                    </>
+                                ) : (
+                                    <Button 
+                                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(editingCharId); }} 
+                                        variant="danger" 
+                                        icon={Trash2}
+                                    >
+                                        删除档案
+                                    </Button>
+                                )}
+                            </div>
+                        ) : <div></div>}
+                        
+                        <div className="flex gap-4">
+                          <Button onClick={() => setShowCharModal(false)} variant="secondary">取消</Button>
+                          <Button onClick={saveCharacter} variant="primary" icon={Check} size="lg">保存档案</Button>
+                        </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {showStatusEditModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowStatusEditModal(false)}></div>
+                      <div className="glass-modal rounded-3xl w-full max-w-sm relative z-10 overflow-hidden animate-slide-up">
+                          <div className="p-6 border-b border-white/10 bg-slate-900/50 text-center">
+                              <h3 className="font-bold text-white text-lg">快速状态调整</h3>
+                              <p className="text-xs text-slate-500 mt-1">直接修改数值，系统会自动记录变动</p>
+                          </div>
+                          <div className="p-8 grid grid-cols-3 gap-6">
+                              {[
+                                  { label: 'HP', color: 'text-red-400', border: 'focus:border-red-500', key: 'hp' },
+                                  { label: 'SAN', color: 'text-emerald-400', border: 'focus:border-emerald-500', key: 'san' },
+                                  { label: 'MP', color: 'text-blue-400', border: 'focus:border-blue-500', key: 'mp' }
+                              ].map(s => (
+                                  <div key={s.key} className="space-y-2 text-center">
+                                      <label className={cn("text-xs font-bold uppercase tracking-wider", s.color)}>{s.label}</label>
+                                      <input 
+                                        type="number" 
+                                        value={statusForm[s.key]} 
+                                        onChange={e => setStatusForm({...statusForm, [s.key]: e.target.value})} 
+                                        className={cn("w-full bg-slate-950 border border-slate-700 rounded-xl py-3 text-center text-white text-lg font-mono focus:outline-none focus:ring-1 focus:ring-transparent transition-colors shadow-inner", s.border)}
+                                      />
+                                  </div>
+                              ))}
+                          </div>
+                          <div className="p-6 bg-slate-900/50 flex justify-center border-t border-white/10">
+                              <Button onClick={updateInvStatus} variant="primary" className="w-full" size="lg">确认变更</Button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {showStoryModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setShowStoryModal(false)}></div>
+                    <div className="bg-[#f8f9fa] rounded-3xl w-full max-w-3xl h-[85vh] flex flex-col relative z-10 shadow-2xl overflow-hidden animate-slide-up">
+                        <div className="px-8 py-5 border-b flex justify-between items-center bg-white">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg"><FileText size={20} className="text-indigo-600"/> 战报预览</h3>
+                            <button onClick={() => setShowStoryModal(false)}><X size={24} className="text-slate-400 hover:text-slate-800 transition-colors"/></button>
+                        </div>
+                        <div className="flex-1 p-10 overflow-y-auto font-serif text-slate-800 leading-relaxed whitespace-pre-wrap text-lg bg-[#fdfdfd]">
+                            {generateStoryText()}
+                        </div>
+                        <div className="p-6 border-t bg-slate-50 flex justify-end">
+                            <Button onClick={() => navigator.clipboard.writeText(generateStoryText())} variant="secondary" className="bg-white border-slate-300 text-slate-700 hover:bg-slate-100 shadow-sm" icon={Copy}>复制全文</Button>
+                        </div>
+                    </div>
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
